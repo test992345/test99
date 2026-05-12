@@ -398,23 +398,36 @@
 <!-- TOAST -->
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script>
 // ============================================================
-// DATA STORE
+// SUPABASE CLIENT
+// ============================================================
+const SUPABASE_URL = 'https://rajyzrdgxwrmswrtsmku.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhanl6cmRneHdybXN3cnRzbWt1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTM4NzksImV4cCI6MjA5NDA4OTg3OX0.xjNt-pKhVruHekQt3uZMtk8s5fE4txrO5QjyDpPR6mI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ============================================================
+// DATA STORE (in-memory cache, synced from Supabase)
 // ============================================================
 let db = {
   customers: [],
   receivables: [],
-  payments: [],
-  nextCustId: 1,
-  nextRecId: 1,
-  nextPayId: 1
+  payments: []
 };
 
-function save() { localStorage.setItem('misugeum_db', JSON.stringify(db)); }
-function load() {
-  const d = localStorage.getItem('misugeum_db');
-  if (d) db = JSON.parse(d);
+async function loadAll() {
+  const [c, r, p] = await Promise.all([
+    sb.from('customers').select('*').order('id'),
+    sb.from('receivables').select('*').order('id'),
+    sb.from('payments').select('*').order('id')
+  ]);
+  if (c.error) throw c.error;
+  if (r.error) throw r.error;
+  if (p.error) throw p.error;
+  db.customers = c.data || [];
+  db.receivables = r.data || [];
+  db.payments = (p.data || []).map(x => ({ ...x, recId: x.rec_id }));
 }
 
 // ============================================================
@@ -450,16 +463,16 @@ function showToast(msg, type = 'success') {
 }
 
 function getRecBalance(rec) {
-  const paid = db.payments.filter(p => p.recId === rec.id).reduce((s, p) => s + p.amount, 0);
-  return rec.amount - paid;
+  const paid = db.payments.filter(p => p.recId === rec.id).reduce((s, p) => s + Number(p.amount), 0);
+  return Number(rec.amount) - paid;
 }
 function getRecPaid(rec) {
-  return db.payments.filter(p => p.recId === rec.id).reduce((s, p) => s + p.amount, 0);
+  return db.payments.filter(p => p.recId === rec.id).reduce((s, p) => s + Number(p.amount), 0);
 }
 function getRecStatus(rec) {
   const bal = getRecBalance(rec);
   if (bal <= 0) return '완납';
-  if (bal < rec.amount) return '일부입금';
+  if (bal < Number(rec.amount)) return '일부입금';
   return '미수';
 }
 
@@ -545,12 +558,12 @@ function renderDashboard() {
 // ============================================================
 // CUSTOMER
 // ============================================================
-function addCustomer() {
+async function addCustomer() {
   const name = document.getElementById('cust_name').value.trim();
   if (!name) { showToast('거래처명을 입력하세요', 'error'); return; }
   if (db.customers.find(c=>c.name===name)) { showToast('이미 등록된 거래처입니다', 'error'); return; }
-  db.customers.push({
-    id: db.nextCustId++, name,
+  const payload = {
+    name,
     regnum: document.getElementById('cust_regnum').value,
     ceo: document.getElementById('cust_ceo').value,
     mgr: document.getElementById('cust_mgr').value,
@@ -558,8 +571,11 @@ function addCustomer() {
     email: document.getElementById('cust_email').value,
     addr: document.getElementById('cust_addr').value,
     memo: document.getElementById('cust_memo').value
-  });
-  save(); clearCustForm(); renderCustomers(); populateRegCustomer(); populatePaySelect();
+  };
+  const { data, error } = await sb.from('customers').insert(payload).select().single();
+  if (error) { showToast('등록 실패: ' + error.message, 'error'); return; }
+  db.customers.push(data);
+  clearCustForm(); renderCustomers(); populateRegCustomer(); populatePaySelect();
   showToast('거래처가 등록되었습니다');
 }
 
@@ -580,10 +596,12 @@ function renderCustomers() {
   document.getElementById('custBody').innerHTML = rows || '<tr><td colspan="9"><div class="empty-state"><div class="icon">🏢</div><div>등록된 거래처가 없습니다</div></div></td></tr>';
 }
 
-function deleteCustomer(id) {
+async function deleteCustomer(id) {
   if (!confirm('거래처를 삭제하시겠습니까?')) return;
+  const { error } = await sb.from('customers').delete().eq('id', id);
+  if (error) { showToast('삭제 실패: ' + error.message, 'error'); return; }
   db.customers = db.customers.filter(c=>c.id!==id);
-  save(); renderCustomers(); populateRegCustomer();
+  renderCustomers(); populateRegCustomer();
   showToast('삭제되었습니다', 'info');
 }
 
@@ -604,7 +622,7 @@ function fillCustomerInfo() {
 // ============================================================
 // RECEIVABLE
 // ============================================================
-function addReceivable() {
+async function addReceivable() {
   const customer = document.getElementById('reg_customer').value;
   const date = document.getElementById('reg_date').value;
   const duedate = document.getElementById('reg_duedate').value;
@@ -614,15 +632,18 @@ function addReceivable() {
   if (!duedate) { showToast('만기일을 입력하세요', 'error'); return; }
   if (!amount || amount <= 0) { showToast('청구금액을 입력하세요', 'error'); return; }
 
-  db.receivables.push({
-    id: db.nextRecId++, customer, date, duedate, amount,
+  const payload = {
+    customer, date, duedate, amount,
     type: document.getElementById('reg_type').value,
     manager: document.getElementById('reg_manager').value,
     contact: document.getElementById('reg_contact').value,
     docno: document.getElementById('reg_docno').value,
     memo: document.getElementById('reg_memo').value
-  });
-  save(); clearRegForm(); populatePaySelect();
+  };
+  const { data, error } = await sb.from('receivables').insert(payload).select().single();
+  if (error) { showToast('등록 실패: ' + error.message, 'error'); return; }
+  db.receivables.push(data);
+  clearRegForm(); populatePaySelect();
   showToast('미수금이 등록되었습니다');
 }
 
@@ -631,11 +652,13 @@ function clearRegForm() {
   document.getElementById('reg_date').value = today();
 }
 
-function deleteReceivable(id) {
+async function deleteReceivable(id) {
   if (!confirm('미수금을 삭제하시겠습니까?\n관련 입금 이력도 삭제됩니다.')) return;
+  const { error } = await sb.from('receivables').delete().eq('id', id);
+  if (error) { showToast('삭제 실패: ' + error.message, 'error'); return; }
   db.receivables = db.receivables.filter(r=>r.id!==id);
   db.payments = db.payments.filter(p=>p.recId!==id);
-  save(); renderLedger(); populatePaySelect();
+  renderLedger(); populatePaySelect();
   showToast('삭제되었습니다', 'info');
 }
 
@@ -656,20 +679,25 @@ function openEdit(id) {
   document.getElementById('editModal').classList.add('open');
 }
 
-function saveEdit() {
+async function saveEdit() {
   const id = parseInt(document.getElementById('edit_id').value);
   const r = db.receivables.find(x=>x.id===id);
   if (!r) return;
-  r.customer = document.getElementById('edit_customer').value;
-  r.date = document.getElementById('edit_date').value;
-  r.duedate = document.getElementById('edit_duedate').value;
-  r.amount = parseFloat(document.getElementById('edit_amount').value);
-  r.type = document.getElementById('edit_type').value;
-  r.manager = document.getElementById('edit_manager').value;
-  r.contact = document.getElementById('edit_contact').value;
-  r.docno = document.getElementById('edit_docno').value;
-  r.memo = document.getElementById('edit_memo').value;
-  save(); closeModal('editModal'); renderLedger();
+  const payload = {
+    customer: document.getElementById('edit_customer').value,
+    date: document.getElementById('edit_date').value,
+    duedate: document.getElementById('edit_duedate').value,
+    amount: parseFloat(document.getElementById('edit_amount').value),
+    type: document.getElementById('edit_type').value,
+    manager: document.getElementById('edit_manager').value,
+    contact: document.getElementById('edit_contact').value,
+    docno: document.getElementById('edit_docno').value,
+    memo: document.getElementById('edit_memo').value
+  };
+  const { data, error } = await sb.from('receivables').update(payload).eq('id', id).select().single();
+  if (error) { showToast('수정 실패: ' + error.message, 'error'); return; }
+  Object.assign(r, data);
+  closeModal('editModal'); renderLedger();
   showToast('수정되었습니다');
 }
 
@@ -776,7 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-function processPayment() {
+async function processPayment() {
   const recId = parseInt(document.getElementById('pay_receivable').value);
   const date = document.getElementById('pay_date').value;
   const amount = parseFloat(document.getElementById('pay_amount').value);
@@ -792,8 +820,10 @@ function processPayment() {
   const bal = getRecBalance(r);
   if (amount > bal) { showToast(`잔액(${fmtn(bal)}원)을 초과할 수 없습니다`, 'error'); return; }
 
-  db.payments.push({ id: db.nextPayId++, recId, date, amount, method, memo });
-  save(); clearPayForm(); populatePaySelect(); renderPayHistory();
+  const { data, error } = await sb.from('payments').insert({ rec_id: recId, date, amount, method, memo }).select().single();
+  if (error) { showToast('입금 처리 실패: ' + error.message, 'error'); return; }
+  db.payments.push({ ...data, recId: data.rec_id });
+  clearPayForm(); populatePaySelect(); renderPayHistory();
   showToast(`입금 처리 완료 (${fmtn(amount)}원)`);
 }
 
@@ -820,10 +850,12 @@ function renderPayHistory() {
   document.getElementById('payHistBody').innerHTML = rows || `<tr><td colspan="7"><div class="empty-state"><div class="icon">💳</div><div>입금 이력이 없습니다</div></div></td></tr>`;
 }
 
-function deletePayment(id) {
+async function deletePayment(id) {
   if (!confirm('입금 이력을 삭제하시겠습니까?')) return;
+  const { error } = await sb.from('payments').delete().eq('id', id);
+  if (error) { showToast('삭제 실패: ' + error.message, 'error'); return; }
   db.payments = db.payments.filter(p=>p.id!==id);
-  save(); renderPayHistory(); populatePaySelect();
+  renderPayHistory(); populatePaySelect();
   showToast('입금 취소 처리되었습니다', 'info');
 }
 
@@ -924,45 +956,100 @@ function exportCSV() {
 }
 
 // ============================================================
+// LOCALSTORAGE → SUPABASE 마이그레이션 (1회용)
+// ============================================================
+async function migrateFromLocalStorage() {
+  const raw = localStorage.getItem('misugeum_db');
+  if (!raw) { showToast('localStorage에 데이터가 없습니다', 'error'); return; }
+  let local;
+  try { local = JSON.parse(raw); } catch { showToast('localStorage 데이터 파싱 실패', 'error'); return; }
+
+  const cCnt = (local.customers||[]).length;
+  const rCnt = (local.receivables||[]).length;
+  const pCnt = (local.payments||[]).length;
+  if (!confirm(`localStorage 데이터를 Supabase로 이관합니다.\n\n거래처: ${cCnt}건\n미수금: ${rCnt}건\n입금: ${pCnt}건\n\n계속하시겠습니까?`)) return;
+
+  try {
+    if (cCnt) {
+      const payload = local.customers.map(c => ({
+        name: c.name, regnum: c.regnum||null, ceo: c.ceo||null, mgr: c.mgr||null,
+        tel: c.tel||null, email: c.email||null, addr: c.addr||null, memo: c.memo||null
+      }));
+      const { error } = await sb.from('customers').upsert(payload, { onConflict: 'name' });
+      if (error) throw error;
+    }
+
+    const recIdMap = {};
+    for (const r of (local.receivables||[])) {
+      const { data, error } = await sb.from('receivables').insert({
+        customer: r.customer, date: r.date, duedate: r.duedate, amount: r.amount,
+        type: r.type||null, manager: r.manager||null, contact: r.contact||null,
+        docno: r.docno||null, memo: r.memo||null
+      }).select().single();
+      if (error) throw error;
+      recIdMap[r.id] = data.id;
+    }
+
+    if (pCnt) {
+      const payload = local.payments
+        .filter(p => recIdMap[p.recId])
+        .map(p => ({
+          rec_id: recIdMap[p.recId],
+          date: p.date, amount: p.amount,
+          method: p.method||null, memo: p.memo||null
+        }));
+      if (payload.length) {
+        const { error } = await sb.from('payments').insert(payload);
+        if (error) throw error;
+      }
+    }
+
+    localStorage.setItem('misugeum_migrated', new Date().toISOString());
+    showToast('이관 완료! 페이지를 새로고침합니다');
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    console.error(e);
+    showToast('이관 실패: ' + (e.message || e), 'error');
+  }
+}
+
+// ============================================================
 // INIT
 // ============================================================
 function formatAmountInput(el) {
   // allow number input normally
 }
 
-load();
-document.getElementById('currentDate').textContent = new Date().toLocaleDateString('ko-KR', {year:'numeric',month:'long',day:'numeric',weekday:'short'});
-document.getElementById('reg_date').value = today();
-document.getElementById('pay_date').value = today();
-populateRegCustomer();
-populatePaySelect();
-renderDashboard();
+async function init() {
+  document.getElementById('currentDate').textContent = new Date().toLocaleDateString('ko-KR', {year:'numeric',month:'long',day:'numeric',weekday:'short'});
+  document.getElementById('reg_date').value = today();
+  document.getElementById('pay_date').value = today();
 
-// Sample data seeding (first time only)
-if (db.customers.length === 0) {
-  const sampleCustomers = [
-    {name:'(주)한국무역', regnum:'123-45-67890', ceo:'김대표', mgr:'이과장', tel:'02-1234-5678', email:'kt@example.com', addr:'서울시 강남구', memo:''},
-    {name:'대성산업(주)', regnum:'234-56-78901', ceo:'박사장', mgr:'최대리', tel:'031-234-5678', email:'ds@example.com', addr:'경기도 수원시', memo:''},
-    {name:'미래전자', regnum:'345-67-89012', ceo:'정대표', mgr:'강주임', tel:'051-345-6789', email:'mf@example.com', addr:'부산시 해운대구', memo:''}
-  ];
-  sampleCustomers.forEach(c => { db.customers.push({id: db.nextCustId++, ...c}); });
+  try {
+    await loadAll();
+  } catch (e) {
+    console.error(e);
+    showToast('Supabase 연결 실패: ' + (e.message || e), 'error');
+    return;
+  }
 
-  const t = today();
-  const sampleRecs = [
-    {customer:'(주)한국무역', date:'2026-02-01', duedate:'2026-03-01', amount:5500000, type:'외상매출', manager:'이과장', contact:'02-1234-5678', docno:'TI-2026-001', memo:'1월분 납품대금'},
-    {customer:'대성산업(주)', date:'2026-01-15', duedate:'2026-02-15', amount:3200000, type:'용역비', manager:'최대리', contact:'031-234-5678', docno:'TI-2026-002', memo:'설비점검 용역'},
-    {customer:'미래전자', date:'2026-03-10', duedate:'2026-04-10', amount:8800000, type:'외상매출', manager:'강주임', contact:'051-345-6789', docno:'TI-2026-003', memo:'부품 납품'},
-    {customer:'(주)한국무역', date:'2026-04-01', duedate:'2026-05-01', amount:2200000, type:'수수료', manager:'이과장', contact:'02-1234-5678', docno:'TI-2026-004', memo:'4월 수수료'},
-    {customer:'대성산업(주)', date:'2026-04-20', duedate:'2026-05-20', amount:1500000, type:'임대료', manager:'최대리', contact:'031-234-5678', docno:'TI-2026-005', memo:'창고 임대료'},
-  ];
-  sampleRecs.forEach(r => { db.receivables.push({id: db.nextRecId++, ...r}); });
+  populateRegCustomer();
+  populatePaySelect();
+  renderDashboard();
 
-  // Sample payments
-  db.payments.push({id: db.nextPayId++, recId:1, date:'2026-03-05', amount:2000000, method:'계좌이체', memo:'1차 입금'});
-  db.payments.push({id: db.nextPayId++, recId:3, date:'2026-04-15', amount:8800000, method:'계좌이체', memo:'전액 완납'});
-
-  save(); renderDashboard(); populateRegCustomer(); populatePaySelect();
+  // localStorage 데이터가 남아있고 아직 이관 안 했으면 안내
+  const hasLocal = !!localStorage.getItem('misugeum_db');
+  const migrated = !!localStorage.getItem('misugeum_migrated');
+  if (hasLocal && !migrated && db.customers.length === 0 && db.receivables.length === 0) {
+    setTimeout(() => {
+      if (confirm('localStorage에 이전 데이터가 발견되었습니다.\nSupabase로 이관하시겠습니까?')) {
+        migrateFromLocalStorage();
+      }
+    }, 500);
+  }
 }
+
+init();
 </script>
 </body>
 </html>
