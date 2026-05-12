@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>미수금관리대장 자동화시스템</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Malgun Gothic', sans-serif; background: #f0f2f5; color: #333; font-size: 13px; }
+
+  /* Header */
+  .header { background: linear-gradient(135deg, #1a3c6e, #2563eb); color: white; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  .header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+  .header-right { display: flex; gap: 8px; align-items: center; font-size: 12px; opacity: 0.85; }
+
+  /* Nav Tabs */
+  .nav { background: white; border-bottom: 2px solid #e5e7eb; display: flex; padding: 0 24px; }
+  .nav-tab { padding: 12px 20px; cursor: pointer; font-size: 13px; font-weight: 600; color: #6b7280; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+  .nav-tab:hover { color: #2563eb; }
+  .nav-tab.active { color: #2563eb; border-bottom-color: #2563eb; }
+
+  /* Main Content */
+  .main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* Dashboard Cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .card { background: white; border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-left: 4px solid; }
+  .card.blue { border-color: #2563eb; } .card.red { border-color: #ef4444; } .card.orange { border-color: #f97316; } .card.green { border-color: #22c55e; }
+  .card-label { font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .card-value { font-size: 22px; font-weight: 700; margin: 6px 0 4px; }
+  .card-sub { font-size: 11px; color: #6b7280; }
+  .card.blue .card-value { color: #2563eb; } .card.red .card-value { color: #ef4444; } .card.orange .card-value { color: #f97316; } .card.green .card-value { color: #22c55e; }
+
+  /* Panel */
+  .panel { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px; }
+  .panel-header { padding: 14px 20px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; }
+  .panel-title { font-size: 14px; font-weight: 700; color: #111827; }
+  .panel-body { padding: 20px; }
+
+  /* Form */
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: 12px; font-weight: 600; color: #374151; }
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;
+    font-family: inherit; transition: border 0.2s;
+  }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .form-group.full { grid-column: 1 / -1; }
+
+  /* Buttons */
+  .btn { padding: 8px 16px; border-radius: 6px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+  .btn-primary { background: #2563eb; color: white; } .btn-primary:hover { background: #1d4ed8; }
+  .btn-success { background: #22c55e; color: white; } .btn-success:hover { background: #16a34a; }
+  .btn-danger { background: #ef4444; color: white; } .btn-danger:hover { background: #dc2626; }
+  .btn-warning { background: #f97316; color: white; } .btn-warning:hover { background: #ea580c; }
+  .btn-secondary { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; } .btn-secondary:hover { background: #e5e7eb; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #f8fafc; padding: 10px 12px; text-align: left; font-size: 12px; font-weight: 700; color: #6b7280; border-bottom: 2px solid #e5e7eb; white-space: nowrap; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid #f3f4f6; font-size: 13px; vertical-align: middle; }
+  tbody tr:hover { background: #f8fafc; }
+  .text-right { text-align: right; }
+  .text-center { text-align: center; }
+
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-red { background: #fee2e2; color: #dc2626; }
+  .badge-orange { background: #ffedd5; color: #ea580c; }
+  .badge-yellow { background: #fef9c3; color: #ca8a04; }
+  .badge-green { background: #dcfce7; color: #16a34a; }
+  .badge-blue { background: #dbeafe; color: #2563eb; }
+  .badge-gray { background: #f3f4f6; color: #6b7280; }
+
+  /* Search/Filter Bar */
+  .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .filter-bar input, .filter-bar select { padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; font-family: inherit; }
+  .filter-bar input { min-width: 180px; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 12px; padding: 24px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: #111827; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+  /* Toast */
+  .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast { padding: 12px 16px; border-radius: 8px; color: white; font-size: 13px; font-weight: 600; animation: slideIn 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.2); min-width: 200px; }
+  .toast.success { background: #22c55e; } .toast.error { background: #ef4444; } .toast.info { background: #2563eb; }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* Print */
+  @media print {
+    .header, .nav, .btn, .filter-bar, .panel-header button, .modal-overlay { display: none !important; }
+    .main { padding: 0; } .panel { box-shadow: none; border: 1px solid #ccc; }
+    body { background: white; }
+  }
+
+  /* Overdue highlight */
+  tr.overdue-high td { background: #fff5f5 !important; }
+  tr.overdue-med td { background: #fffbeb !important; }
+
+  .amount { font-family: 'Courier New', monospace; font-weight: 600; }
+  .empty-state { text-align: center; padding: 40px; color: #9ca3af; }
+  .empty-state .icon { font-size: 40px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📋 미수금관리대장 자동화시스템</h1>
+  <div class="header-right">
+    <span id="currentDate"></span>
+    <button class="btn btn-secondary btn-sm" onclick="exportCSV()">📊 CSV 내보내기</button>
+    <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨️ 인쇄</button>
+  </div>
+</div>
+
+<div class="nav">
+  <div class="nav-tab active" onclick="showSection('dashboard', this)">📊 대시보드</div>
+  <div class="nav-tab" onclick="showSection('register', this)">➕ 미수금 등록</div>
+  <div class="nav-tab" onclick="showSection('ledger', this)">📋 미수금 대장</div>
+  <div class="nav-tab" onclick="showSection('payment', this)">💰 입금 처리</div>
+  <div class="nav-tab" onclick="showSection('customer', this)">🏢 거래처 관리</div>
+  <div class="nav-tab" onclick="showSection('report', this)">📈 연체 현황</div>
+</div>
+
+<div class="main">
+
+  <!-- ===== DASHBOARD ===== -->
+  <div class="section active" id="section-dashboard">
+    <div class="cards" id="dashCards"></div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; flex-wrap:wrap;">
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">⚠️ 연체 TOP 5 거래처</span></div>
+        <div class="panel-body" id="top5Panel"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">📅 최근 입금 내역</span></div>
+        <div class="panel-body" id="recentPayPanel"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:16px;">
+      <div class="panel-header"><span class="panel-title">📋 미수금 현황 요약</span></div>
+      <div class="panel-body">
+        <div class="table-wrap"><table id="summaryTable"></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== REGISTER ===== -->
+  <div class="section" id="section-register">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">➕ 미수금 등록</span></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>거래처 *</label>
+            <select id="reg_customer" onchange="fillCustomerInfo()">
+              <option value="">-- 거래처 선택 --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>발생일 *</label>
+            <input type="date" id="reg_date">
+          </div>
+          <div class="form-group">
+            <label>만기일 *</label>
+            <input type="date" id="reg_duedate">
+          </div>
+          <div class="form-group">
+            <label>청구금액 (원) *</label>
+            <input type="number" id="reg_amount" placeholder="0" min="0" oninput="formatAmountInput(this)">
+          </div>
+          <div class="form-group">
+            <label>거래 구분</label>
+            <select id="reg_type">
+              <option>외상매출</option>
+              <option>용역비</option>
+              <option>임대료</option>
+              <option>수수료</option>
+              <option>기타</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>담당자</label>
+            <input type="text" id="reg_manager" placeholder="담당자명">
+          </div>
+          <div class="form-group">
+            <label>연락처</label>
+            <input type="text" id="reg_contact" placeholder="000-0000-0000">
+          </div>
+          <div class="form-group">
+            <label>증빙 번호</label>
+            <input type="text" id="reg_docno" placeholder="세금계산서/거래명세서 번호">
+          </div>
+          <div class="form-group full">
+            <label>비고</label>
+            <textarea id="reg_memo" rows="2" placeholder="메모 입력..."></textarea>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="addReceivable()">등록</button>
+          <button class="btn btn-secondary" onclick="clearRegForm()">초기화</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== LEDGER ===== -->
+  <div class="section" id="section-ledger">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">📋 미수금 대장</span>
+        <span id="ledger-count" style="font-size:12px;color:#6b7280;"></span>
+      </div>
+      <div class="panel-body">
+        <div class="filter-bar">
+          <input type="text" id="f_search" placeholder="🔍 거래처/비고 검색" oninput="renderLedger()">
+          <select id="f_status" onchange="renderLedger()">
+            <option value="">전체 상태</option>
+            <option value="미수">미수</option>
+            <option value="일부입금">일부입금</option>
+            <option value="완납">완납</option>
+          </select>
+          <select id="f_type" onchange="renderLedger()">
+            <option value="">전체 구분</option>
+            <option>외상매출</option><option>용역비</option><option>임대료</option><option>수수료</option><option>기타</option>
+          </select>
+          <select id="f_overdue" onchange="renderLedger()">
+            <option value="">연체 전체</option>
+            <option value="overdue">연체만</option>
+            <option value="normal">정상만</option>
+          </select>
+          <input type="date" id="f_from" onchange="renderLedger()" title="발생일 시작">
+          <input type="date" id="f_to" onchange="renderLedger()" title="발생일 종료">
+          <button class="btn btn-secondary btn-sm" onclick="clearFilters()">필터 초기화</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>NO</th><th>거래처</th><th>발생일</th><th>만기일</th><th>구분</th>
+                <th class="text-right">청구금액</th><th class="text-right">입금액</th><th class="text-right">잔액</th>
+                <th>연체일수</th><th>상태</th><th>담당자</th><th>비고</th><th>관리</th>
+              </tr>
+            </thead>
+            <tbody id="ledgerBody"></tbody>
+          </table>
+        </div>
+        <div id="ledger-total" style="margin-top:12px; text-align:right; font-weight:700; font-size:14px; color:#1a3c6e;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PAYMENT ===== -->
+  <div class="section" id="section-payment">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">💰 입금 처리</span></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>미수금 선택 *</label>
+            <select id="pay_receivable" onchange="onSelectReceivable()">
+              <option value="">-- 미수금 선택 --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>입금일 *</label>
+            <input type="date" id="pay_date">
+          </div>
+          <div class="form-group">
+            <label>입금액 (원) *</label>
+            <input type="number" id="pay_amount" placeholder="0" min="0">
+          </div>
+          <div class="form-group">
+            <label>입금 방법</label>
+            <select id="pay_method">
+              <option>계좌이체</option><option>현금</option><option>수표</option><option>어음</option><option>카드</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>잔액 (자동계산)</label>
+            <input type="text" id="pay_remain" readonly style="background:#f3f4f6; font-weight:700; color:#ef4444;">
+          </div>
+          <div class="form-group full">
+            <label>비고</label>
+            <input type="text" id="pay_memo" placeholder="입금 메모">
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-success" onclick="processPayment()">입금 처리</button>
+          <button class="btn btn-secondary" onclick="clearPayForm()">초기화</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">📜 입금 이력</span></div>
+      <div class="panel-body">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>입금일</th><th>거래처</th><th>구분</th><th class="text-right">입금액</th><th>방법</th><th>비고</th><th>관리</th></tr></thead>
+            <tbody id="payHistBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CUSTOMER ===== -->
+  <div class="section" id="section-customer">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">🏢 거래처 등록</span></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="form-group"><label>거래처명 *</label><input type="text" id="cust_name" placeholder="거래처명"></div>
+          <div class="form-group"><label>사업자번호</label><input type="text" id="cust_regnum" placeholder="000-00-00000"></div>
+          <div class="form-group"><label>대표자</label><input type="text" id="cust_ceo" placeholder="대표자명"></div>
+          <div class="form-group"><label>담당자</label><input type="text" id="cust_mgr" placeholder="담당자명"></div>
+          <div class="form-group"><label>연락처</label><input type="text" id="cust_tel" placeholder="000-0000-0000"></div>
+          <div class="form-group"><label>이메일</label><input type="email" id="cust_email" placeholder="email@example.com"></div>
+          <div class="form-group full"><label>주소</label><input type="text" id="cust_addr" placeholder="주소"></div>
+          <div class="form-group full"><label>비고</label><input type="text" id="cust_memo" placeholder="메모"></div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="addCustomer()">등록</button>
+          <button class="btn btn-secondary" onclick="clearCustForm()">초기화</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">거래처 목록</span></div>
+      <div class="panel-body">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>NO</th><th>거래처명</th><th>사업자번호</th><th>대표자</th><th>담당자</th><th>연락처</th><th>이메일</th><th>미수잔액</th><th>관리</th></tr></thead>
+            <tbody id="custBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== REPORT ===== -->
+  <div class="section" id="section-report">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">📈 연체 현황 분석</span></div>
+      <div class="panel-body">
+        <div class="cards" id="reportCards"></div>
+        <div class="table-wrap" style="margin-top:16px;">
+          <table>
+            <thead><tr><th>거래처</th><th>건수</th><th class="text-right">총 청구액</th><th class="text-right">총 입금액</th><th class="text-right">미수잔액</th><th>최대 연체일</th><th>연체 등급</th></tr></thead>
+            <tbody id="reportBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">연체 구간별 분포</span></div>
+      <div class="panel-body" id="overdueChart"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h3>✏️ 미수금 수정</h3>
+    <input type="hidden" id="edit_id">
+    <div class="form-grid">
+      <div class="form-group"><label>거래처</label><select id="edit_customer"></select></div>
+      <div class="form-group"><label>발생일</label><input type="date" id="edit_date"></div>
+      <div class="form-group"><label>만기일</label><input type="date" id="edit_duedate"></div>
+      <div class="form-group"><label>청구금액</label><input type="number" id="edit_amount"></div>
+      <div class="form-group"><label>구분</label>
+        <select id="edit_type"><option>외상매출</option><option>용역비</option><option>임대료</option><option>수수료</option><option>기타</option></select>
+      </div>
+      <div class="form-group"><label>담당자</label><input type="text" id="edit_manager"></div>
+      <div class="form-group"><label>연락처</label><input type="text" id="edit_contact"></div>
+      <div class="form-group"><label>증빙 번호</label><input type="text" id="edit_docno"></div>
+      <div class="form-group full"><label>비고</label><textarea id="edit_memo" rows="2"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveEdit()">저장</button>
+      <button class="btn btn-secondary" onclick="closeModal('editModal')">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ============================================================
+// DATA STORE
+// ============================================================
+let db = {
+  customers: [],
+  receivables: [],
+  payments: [],
+  nextCustId: 1,
+  nextRecId: 1,
+  nextPayId: 1
+};
+
+function save() { localStorage.setItem('misugeum_db', JSON.stringify(db)); }
+function load() {
+  const d = localStorage.getItem('misugeum_db');
+  if (d) db = JSON.parse(d);
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function fmt(n) { return Number(n || 0).toLocaleString('ko-KR') + '원'; }
+function fmtn(n) { return Number(n || 0).toLocaleString('ko-KR'); }
+function today() { return new Date().toISOString().slice(0, 10); }
+function overdueDays(duedate) {
+  if (!duedate) return 0;
+  const due = new Date(duedate); const now = new Date(today());
+  const diff = Math.floor((now - due) / 86400000);
+  return diff > 0 ? diff : 0;
+}
+function overdueBadge(days) {
+  if (days === 0) return '<span class="badge badge-green">정상</span>';
+  if (days <= 30) return `<span class="badge badge-yellow">D+${days}</span>`;
+  if (days <= 90) return `<span class="badge badge-orange">D+${days}</span>`;
+  return `<span class="badge badge-red">D+${days}</span>`;
+}
+function statusBadge(status) {
+  if (status === '완납') return '<span class="badge badge-green">완납</span>';
+  if (status === '일부입금') return '<span class="badge badge-blue">일부입금</span>';
+  return '<span class="badge badge-red">미수</span>';
+}
+
+function showToast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function getRecBalance(rec) {
+  const paid = db.payments.filter(p => p.recId === rec.id).reduce((s, p) => s + p.amount, 0);
+  return rec.amount - paid;
+}
+function getRecPaid(rec) {
+  return db.payments.filter(p => p.recId === rec.id).reduce((s, p) => s + p.amount, 0);
+}
+function getRecStatus(rec) {
+  const bal = getRecBalance(rec);
+  if (bal <= 0) return '완납';
+  if (bal < rec.amount) return '일부입금';
+  return '미수';
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function showSection(name, el) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('section-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'ledger') { populateRegCustomer(); renderLedger(); }
+  if (name === 'payment') { populatePaySelect(); renderPayHistory(); }
+  if (name === 'customer') renderCustomers();
+  if (name === 'register') populateRegCustomer();
+  if (name === 'report') renderReport();
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function renderDashboard() {
+  const recs = db.receivables;
+  const total = recs.reduce((s, r) => s + r.amount, 0);
+  const totalPaid = recs.reduce((s, r) => s + getRecPaid(r), 0);
+  const totalBal = recs.reduce((s, r) => s + getRecBalance(r), 0);
+  const overdueRecs = recs.filter(r => getRecStatus(r) !== '완납' && overdueDays(r.duedate) > 0);
+  const overdueAmt = overdueRecs.reduce((s, r) => s + getRecBalance(r), 0);
+
+  document.getElementById('dashCards').innerHTML = `
+    <div class="card blue"><div class="card-label">총 청구금액</div><div class="card-value">${fmtn(total)}</div><div class="card-sub">전체 ${recs.length}건</div></div>
+    <div class="card green"><div class="card-label">총 입금액</div><div class="card-value">${fmtn(totalPaid)}</div><div class="card-sub">회수율 ${total ? (totalPaid/total*100).toFixed(1) : 0}%</div></div>
+    <div class="card red"><div class="card-label">미수 잔액</div><div class="card-value">${fmtn(totalBal)}</div><div class="card-sub">${recs.filter(r=>getRecStatus(r)!=='완납').length}건 미수</div></div>
+    <div class="card orange"><div class="card-label">연체 금액</div><div class="card-value">${fmtn(overdueAmt)}</div><div class="card-sub">${overdueRecs.length}건 연체 중</div></div>
+  `;
+
+  // Top 5
+  const custBal = {};
+  recs.filter(r=>getRecStatus(r)!=='완납').forEach(r => {
+    custBal[r.customer] = (custBal[r.customer] || 0) + getRecBalance(r);
+  });
+  const top5 = Object.entries(custBal).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  document.getElementById('top5Panel').innerHTML = top5.length ? `
+    <table style="width:100%">
+      <thead><tr><th>거래처</th><th class="text-right">미수잔액</th></tr></thead>
+      <tbody>${top5.map(([c,v])=>`<tr><td>${c}</td><td class="text-right amount" style="color:#ef4444">${fmtn(v)}</td></tr>`).join('')}</tbody>
+    </table>` : '<div class="empty-state"><div class="icon">✅</div><div>미수금이 없습니다</div></div>';
+
+  // Recent payments
+  const recentPay = [...db.payments].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  document.getElementById('recentPayPanel').innerHTML = recentPay.length ? `
+    <table style="width:100%">
+      <thead><tr><th>입금일</th><th>거래처</th><th class="text-right">입금액</th></tr></thead>
+      <tbody>${recentPay.map(p=>{
+        const r = db.receivables.find(x=>x.id===p.recId);
+        return `<tr><td>${p.date}</td><td>${r?r.customer:'-'}</td><td class="text-right amount" style="color:#22c55e">${fmtn(p.amount)}</td></tr>`;
+      }).join('')}</tbody>
+    </table>` : '<div class="empty-state"><div class="icon">💳</div><div>입금 내역이 없습니다</div></div>';
+
+  // Summary table by customer
+  const custSummary = {};
+  recs.forEach(r => {
+    if (!custSummary[r.customer]) custSummary[r.customer] = {cnt:0, amt:0, paid:0, bal:0};
+    custSummary[r.customer].cnt++;
+    custSummary[r.customer].amt += r.amount;
+    custSummary[r.customer].paid += getRecPaid(r);
+    custSummary[r.customer].bal += getRecBalance(r);
+  });
+  const rows = Object.entries(custSummary).map(([c,v])=>`
+    <tr>
+      <td>${c}</td><td class="text-center">${v.cnt}</td>
+      <td class="text-right amount">${fmtn(v.amt)}</td>
+      <td class="text-right amount" style="color:#22c55e">${fmtn(v.paid)}</td>
+      <td class="text-right amount" style="color:#ef4444">${fmtn(v.bal)}</td>
+      <td class="text-center">${v.amt?(v.paid/v.amt*100).toFixed(1):0}%</td>
+    </tr>`).join('');
+  document.getElementById('summaryTable').innerHTML = rows ? `
+    <thead><tr><th>거래처</th><th class="text-center">건수</th><th class="text-right">청구액</th><th class="text-right">입금액</th><th class="text-right">미수잔액</th><th class="text-center">회수율</th></tr></thead>
+    <tbody>${rows}</tbody>` : '<thead></thead><tbody><tr><td colspan="6"><div class="empty-state"><div class="icon">📋</div><div>데이터가 없습니다</div></div></td></tr></tbody>';
+}
+
+// ============================================================
+// CUSTOMER
+// ============================================================
+function addCustomer() {
+  const name = document.getElementById('cust_name').value.trim();
+  if (!name) { showToast('거래처명을 입력하세요', 'error'); return; }
+  if (db.customers.find(c=>c.name===name)) { showToast('이미 등록된 거래처입니다', 'error'); return; }
+  db.customers.push({
+    id: db.nextCustId++, name,
+    regnum: document.getElementById('cust_regnum').value,
+    ceo: document.getElementById('cust_ceo').value,
+    mgr: document.getElementById('cust_mgr').value,
+    tel: document.getElementById('cust_tel').value,
+    email: document.getElementById('cust_email').value,
+    addr: document.getElementById('cust_addr').value,
+    memo: document.getElementById('cust_memo').value
+  });
+  save(); clearCustForm(); renderCustomers(); populateRegCustomer(); populatePaySelect();
+  showToast('거래처가 등록되었습니다');
+}
+
+function clearCustForm() {
+  ['cust_name','cust_regnum','cust_ceo','cust_mgr','cust_tel','cust_email','cust_addr','cust_memo'].forEach(id => document.getElementById(id).value='');
+}
+
+function renderCustomers() {
+  const rows = db.customers.map((c,i) => {
+    const bal = db.receivables.filter(r=>r.customer===c.name).reduce((s,r)=>s+getRecBalance(r),0);
+    return `<tr>
+      <td>${i+1}</td><td><b>${c.name}</b></td><td>${c.regnum||'-'}</td><td>${c.ceo||'-'}</td>
+      <td>${c.mgr||'-'}</td><td>${c.tel||'-'}</td><td>${c.email||'-'}</td>
+      <td class="text-right amount" style="color:${bal>0?'#ef4444':'#22c55e'}">${fmtn(bal)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteCustomer(${c.id})">삭제</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('custBody').innerHTML = rows || '<tr><td colspan="9"><div class="empty-state"><div class="icon">🏢</div><div>등록된 거래처가 없습니다</div></div></td></tr>';
+}
+
+function deleteCustomer(id) {
+  if (!confirm('거래처를 삭제하시겠습니까?')) return;
+  db.customers = db.customers.filter(c=>c.id!==id);
+  save(); renderCustomers(); populateRegCustomer();
+  showToast('삭제되었습니다', 'info');
+}
+
+function populateRegCustomer() {
+  const opts = '<option value="">-- 거래처 선택 --</option>' + db.customers.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  ['reg_customer','edit_customer'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=opts; });
+}
+
+function fillCustomerInfo() {
+  const name = document.getElementById('reg_customer').value;
+  const c = db.customers.find(x=>x.name===name);
+  if (c) {
+    document.getElementById('reg_manager').value = c.mgr || '';
+    document.getElementById('reg_contact').value = c.tel || '';
+  }
+}
+
+// ============================================================
+// RECEIVABLE
+// ============================================================
+function addReceivable() {
+  const customer = document.getElementById('reg_customer').value;
+  const date = document.getElementById('reg_date').value;
+  const duedate = document.getElementById('reg_duedate').value;
+  const amount = parseFloat(document.getElementById('reg_amount').value);
+  if (!customer) { showToast('거래처를 선택하세요', 'error'); return; }
+  if (!date) { showToast('발생일을 입력하세요', 'error'); return; }
+  if (!duedate) { showToast('만기일을 입력하세요', 'error'); return; }
+  if (!amount || amount <= 0) { showToast('청구금액을 입력하세요', 'error'); return; }
+
+  db.receivables.push({
+    id: db.nextRecId++, customer, date, duedate, amount,
+    type: document.getElementById('reg_type').value,
+    manager: document.getElementById('reg_manager').value,
+    contact: document.getElementById('reg_contact').value,
+    docno: document.getElementById('reg_docno').value,
+    memo: document.getElementById('reg_memo').value
+  });
+  save(); clearRegForm(); populatePaySelect();
+  showToast('미수금이 등록되었습니다');
+}
+
+function clearRegForm() {
+  ['reg_customer','reg_date','reg_duedate','reg_amount','reg_manager','reg_contact','reg_docno','reg_memo'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('reg_date').value = today();
+}
+
+function deleteReceivable(id) {
+  if (!confirm('미수금을 삭제하시겠습니까?\n관련 입금 이력도 삭제됩니다.')) return;
+  db.receivables = db.receivables.filter(r=>r.id!==id);
+  db.payments = db.payments.filter(p=>p.recId!==id);
+  save(); renderLedger(); populatePaySelect();
+  showToast('삭제되었습니다', 'info');
+}
+
+function openEdit(id) {
+  const r = db.receivables.find(x=>x.id===id);
+  if (!r) return;
+  populateRegCustomer();
+  document.getElementById('edit_id').value = id;
+  document.getElementById('edit_customer').value = r.customer;
+  document.getElementById('edit_date').value = r.date;
+  document.getElementById('edit_duedate').value = r.duedate;
+  document.getElementById('edit_amount').value = r.amount;
+  document.getElementById('edit_type').value = r.type;
+  document.getElementById('edit_manager').value = r.manager;
+  document.getElementById('edit_contact').value = r.contact;
+  document.getElementById('edit_docno').value = r.docno;
+  document.getElementById('edit_memo').value = r.memo;
+  document.getElementById('editModal').classList.add('open');
+}
+
+function saveEdit() {
+  const id = parseInt(document.getElementById('edit_id').value);
+  const r = db.receivables.find(x=>x.id===id);
+  if (!r) return;
+  r.customer = document.getElementById('edit_customer').value;
+  r.date = document.getElementById('edit_date').value;
+  r.duedate = document.getElementById('edit_duedate').value;
+  r.amount = parseFloat(document.getElementById('edit_amount').value);
+  r.type = document.getElementById('edit_type').value;
+  r.manager = document.getElementById('edit_manager').value;
+  r.contact = document.getElementById('edit_contact').value;
+  r.docno = document.getElementById('edit_docno').value;
+  r.memo = document.getElementById('edit_memo').value;
+  save(); closeModal('editModal'); renderLedger();
+  showToast('수정되었습니다');
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ============================================================
+// LEDGER
+// ============================================================
+function renderLedger() {
+  const search = document.getElementById('f_search').value.toLowerCase();
+  const status = document.getElementById('f_status').value;
+  const type = document.getElementById('f_type').value;
+  const overdueF = document.getElementById('f_overdue').value;
+  const from = document.getElementById('f_from').value;
+  const to = document.getElementById('f_to').value;
+
+  let recs = [...db.receivables].sort((a,b)=>b.date.localeCompare(a.date));
+
+  if (search) recs = recs.filter(r => r.customer.toLowerCase().includes(search) || (r.memo||'').toLowerCase().includes(search) || (r.docno||'').toLowerCase().includes(search));
+  if (status) recs = recs.filter(r => getRecStatus(r) === status);
+  if (type) recs = recs.filter(r => r.type === type);
+  if (overdueF === 'overdue') recs = recs.filter(r => getRecStatus(r) !== '완납' && overdueDays(r.duedate) > 0);
+  if (overdueF === 'normal') recs = recs.filter(r => getRecStatus(r) === '완납' || overdueDays(r.duedate) === 0);
+  if (from) recs = recs.filter(r => r.date >= from);
+  if (to) recs = recs.filter(r => r.date <= to);
+
+  document.getElementById('ledger-count').textContent = `총 ${recs.length}건`;
+
+  let totalAmt = 0, totalPaid = 0, totalBal = 0;
+  const rows = recs.map((r, i) => {
+    const paid = getRecPaid(r);
+    const bal = getRecBalance(r);
+    const st = getRecStatus(r);
+    const od = st !== '완납' ? overdueDays(r.duedate) : 0;
+    totalAmt += r.amount; totalPaid += paid; totalBal += bal;
+    const cls = od > 90 ? 'overdue-high' : od > 0 ? 'overdue-med' : '';
+    return `<tr class="${cls}">
+      <td>${i+1}</td>
+      <td><b>${r.customer}</b></td>
+      <td>${r.date}</td>
+      <td>${r.duedate}</td>
+      <td><span class="badge badge-gray">${r.type}</span></td>
+      <td class="text-right amount">${fmtn(r.amount)}</td>
+      <td class="text-right amount" style="color:#22c55e">${fmtn(paid)}</td>
+      <td class="text-right amount" style="color:${bal>0?'#ef4444':'#22c55e'}">${fmtn(bal)}</td>
+      <td class="text-center">${overdueBadge(od)}</td>
+      <td>${statusBadge(st)}</td>
+      <td>${r.manager||'-'}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.memo||''}">${r.memo||'-'}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="openEdit(${r.id})">수정</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteReceivable(${r.id})">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ledgerBody').innerHTML = rows || `<tr><td colspan="13"><div class="empty-state"><div class="icon">📋</div><div>데이터가 없습니다</div></div></td></tr>`;
+  document.getElementById('ledger-total').innerHTML = `합계 — 청구: <span style="color:#2563eb">${fmtn(totalAmt)}</span> | 입금: <span style="color:#22c55e">${fmtn(totalPaid)}</span> | 미수잔액: <span style="color:#ef4444">${fmtn(totalBal)}</span>`;
+}
+
+function clearFilters() {
+  ['f_search','f_from','f_to'].forEach(id => document.getElementById(id).value='');
+  ['f_status','f_type','f_overdue'].forEach(id => document.getElementById(id).value='');
+  renderLedger();
+}
+
+// ============================================================
+// PAYMENT
+// ============================================================
+function populatePaySelect() {
+  const open = db.receivables.filter(r => getRecStatus(r) !== '완납').sort((a,b)=>a.duedate.localeCompare(b.duedate));
+  const opts = '<option value="">-- 미수금 선택 --</option>' + open.map(r => {
+    const od = overdueDays(r.duedate);
+    return `<option value="${r.id}">[${r.customer}] ${r.date} / 잔액: ${fmtn(getRecBalance(r))}${od>0?' (연체'+od+'일)':''}</option>`;
+  }).join('');
+  document.getElementById('pay_receivable').innerHTML = opts;
+  document.getElementById('pay_amount').value = '';
+  document.getElementById('pay_remain').value = '';
+}
+
+function onSelectReceivable() {
+  const id = parseInt(document.getElementById('pay_receivable').value);
+  const r = db.receivables.find(x=>x.id===id);
+  if (r) {
+    const bal = getRecBalance(r);
+    document.getElementById('pay_amount').value = bal;
+    document.getElementById('pay_remain').value = '0원 (완납 예정)';
+  } else {
+    document.getElementById('pay_amount').value = '';
+    document.getElementById('pay_remain').value = '';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('pay_amount').addEventListener('input', function() {
+    const id = parseInt(document.getElementById('pay_receivable').value);
+    const r = db.receivables.find(x=>x.id===id);
+    if (r) {
+      const bal = getRecBalance(r);
+      const paying = parseFloat(this.value) || 0;
+      const remain = bal - paying;
+      document.getElementById('pay_remain').value = remain <= 0 ? '0원 (완납)' : fmtn(remain) + '원';
+    }
+  });
+});
+
+function processPayment() {
+  const recId = parseInt(document.getElementById('pay_receivable').value);
+  const date = document.getElementById('pay_date').value;
+  const amount = parseFloat(document.getElementById('pay_amount').value);
+  const method = document.getElementById('pay_method').value;
+  const memo = document.getElementById('pay_memo').value;
+
+  if (!recId) { showToast('미수금을 선택하세요', 'error'); return; }
+  if (!date) { showToast('입금일을 입력하세요', 'error'); return; }
+  if (!amount || amount <= 0) { showToast('입금액을 입력하세요', 'error'); return; }
+
+  const r = db.receivables.find(x=>x.id===recId);
+  if (!r) return;
+  const bal = getRecBalance(r);
+  if (amount > bal) { showToast(`잔액(${fmtn(bal)}원)을 초과할 수 없습니다`, 'error'); return; }
+
+  db.payments.push({ id: db.nextPayId++, recId, date, amount, method, memo });
+  save(); clearPayForm(); populatePaySelect(); renderPayHistory();
+  showToast(`입금 처리 완료 (${fmtn(amount)}원)`);
+}
+
+function clearPayForm() {
+  document.getElementById('pay_date').value = today();
+  document.getElementById('pay_amount').value = '';
+  document.getElementById('pay_remain').value = '';
+  document.getElementById('pay_memo').value = '';
+}
+
+function renderPayHistory() {
+  const rows = [...db.payments].sort((a,b)=>b.date.localeCompare(a.date)).map(p => {
+    const r = db.receivables.find(x=>x.id===p.recId);
+    return `<tr>
+      <td>${p.date}</td>
+      <td>${r?r.customer:'-'}</td>
+      <td><span class="badge badge-gray">${r?r.type:'-'}</span></td>
+      <td class="text-right amount" style="color:#22c55e">${fmtn(p.amount)}</td>
+      <td>${p.method}</td>
+      <td>${p.memo||'-'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deletePayment(${p.id})">취소</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('payHistBody').innerHTML = rows || `<tr><td colspan="7"><div class="empty-state"><div class="icon">💳</div><div>입금 이력이 없습니다</div></div></td></tr>`;
+}
+
+function deletePayment(id) {
+  if (!confirm('입금 이력을 삭제하시겠습니까?')) return;
+  db.payments = db.payments.filter(p=>p.id!==id);
+  save(); renderPayHistory(); populatePaySelect();
+  showToast('입금 취소 처리되었습니다', 'info');
+}
+
+// ============================================================
+// REPORT
+// ============================================================
+function renderReport() {
+  const recs = db.receivables;
+  let g0=0,g30=0,g90=0,g180=0,g181=0; // 0, 1-30, 31-90, 91-180, 181+
+  let a0=0,a30=0,a90=0,a180=0,a181=0;
+
+  const custMap = {};
+  recs.forEach(r => {
+    const bal = getRecBalance(r);
+    const st = getRecStatus(r);
+    const od = st !== '완납' ? overdueDays(r.duedate) : 0;
+    if (!custMap[r.customer]) custMap[r.customer] = {cnt:0,amt:0,paid:0,bal:0,maxOd:0};
+    custMap[r.customer].cnt++;
+    custMap[r.customer].amt += r.amount;
+    custMap[r.customer].paid += getRecPaid(r);
+    custMap[r.customer].bal += bal;
+    if (od > custMap[r.customer].maxOd) custMap[r.customer].maxOd = od;
+
+    if (st !== '완납') {
+      if (od === 0) { g0++; a0+=bal; }
+      else if (od <= 30) { g30++; a30+=bal; }
+      else if (od <= 90) { g90++; a90+=bal; }
+      else if (od <= 180) { g180++; a180+=bal; }
+      else { g181++; a181+=bal; }
+    }
+  });
+
+  const totalBal = a0+a30+a90+a180+a181;
+  document.getElementById('reportCards').innerHTML = `
+    <div class="card green"><div class="card-label">정상 (만기 미도래)</div><div class="card-value">${fmtn(a0)}</div><div class="card-sub">${g0}건</div></div>
+    <div class="card yellow" style="border-color:#eab308"><div class="card-label">연체 1~30일</div><div class="card-value" style="color:#ca8a04">${fmtn(a30)}</div><div class="card-sub">${g30}건</div></div>
+    <div class="card orange"><div class="card-label">연체 31~90일</div><div class="card-value">${fmtn(a90)}</div><div class="card-sub">${g90}건</div></div>
+    <div class="card red"><div class="card-label">연체 91~180일</div><div class="card-value">${fmtn(a180)}</div><div class="card-sub">${g180}건</div></div>
+    <div class="card red"><div class="card-label">연체 181일+</div><div class="card-value">${fmtn(a181)}</div><div class="card-sub">${g181}건 (불량채권 위험)</div></div>
+  `;
+
+  function gradeLabel(od) {
+    if (od === 0) return '<span class="badge badge-green">정상</span>';
+    if (od <= 30) return '<span class="badge badge-yellow">주의</span>';
+    if (od <= 90) return '<span class="badge badge-orange">경고</span>';
+    if (od <= 180) return '<span class="badge badge-red">위험</span>';
+    return '<span class="badge badge-red">불량</span>';
+  }
+
+  const rows = Object.entries(custMap).sort((a,b)=>b[1].bal-a[1].bal).map(([c,v])=>`
+    <tr>
+      <td><b>${c}</b></td><td class="text-center">${v.cnt}</td>
+      <td class="text-right amount">${fmtn(v.amt)}</td>
+      <td class="text-right amount" style="color:#22c55e">${fmtn(v.paid)}</td>
+      <td class="text-right amount" style="color:#ef4444">${fmtn(v.bal)}</td>
+      <td class="text-center">${v.maxOd > 0 ? 'D+'+v.maxOd+'일' : '-'}</td>
+      <td class="text-center">${gradeLabel(v.maxOd)}</td>
+    </tr>`).join('');
+  document.getElementById('reportBody').innerHTML = rows || `<tr><td colspan="7"><div class="empty-state"><div class="icon">📊</div><div>데이터가 없습니다</div></div></td></tr>`;
+
+  // Bar chart
+  const maxAmt = Math.max(a0,a30,a90,a180,a181,1);
+  const bars = [
+    {label:'정상',amt:a0,cnt:g0,color:'#22c55e'},
+    {label:'1-30일',amt:a30,cnt:g30,color:'#eab308'},
+    {label:'31-90일',amt:a90,cnt:g90,color:'#f97316'},
+    {label:'91-180일',amt:a180,cnt:g180,color:'#ef4444'},
+    {label:'181일+',amt:a181,cnt:g181,color:'#991b1b'},
+  ];
+  document.getElementById('overdueChart').innerHTML = `
+    <div style="display:flex; align-items:flex-end; gap:16px; height:150px; padding-bottom:30px;">
+      ${bars.map(b=>`
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
+          <div style="font-size:11px; color:#374151; font-weight:700;">${fmtn(b.amt)}</div>
+          <div style="width:100%; background:${b.color}; height:${Math.round(b.amt/maxAmt*100)}px; border-radius:4px 4px 0 0; min-height:${b.amt>0?4:0}px;"></div>
+          <div style="font-size:11px; color:#6b7280;">${b.label}</div>
+          <div style="font-size:11px; color:#9ca3af;">${b.cnt}건</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ============================================================
+// EXPORT CSV
+// ============================================================
+function exportCSV() {
+  const header = ['NO','거래처','발생일','만기일','구분','청구금액','입금액','잔액','연체일수','상태','담당자','증빙번호','비고'];
+  const rows = db.receivables.map((r,i)=>{
+    const paid = getRecPaid(r); const bal = getRecBalance(r);
+    const st = getRecStatus(r); const od = st!=='완납' ? overdueDays(r.duedate) : 0;
+    return [i+1,r.customer,r.date,r.duedate,r.type,r.amount,paid,bal,od,st,r.manager||'',r.docno||'',r.memo||''];
+  });
+  const csv = '﻿' + [header,...rows].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `미수금관리대장_${today()}.csv`;
+  a.click();
+  showToast('CSV 파일을 내보냈습니다');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function formatAmountInput(el) {
+  // allow number input normally
+}
+
+load();
+document.getElementById('currentDate').textContent = new Date().toLocaleDateString('ko-KR', {year:'numeric',month:'long',day:'numeric',weekday:'short'});
+document.getElementById('reg_date').value = today();
+document.getElementById('pay_date').value = today();
+populateRegCustomer();
+populatePaySelect();
+renderDashboard();
+
+// Sample data seeding (first time only)
+if (db.customers.length === 0) {
+  const sampleCustomers = [
+    {name:'(주)한국무역', regnum:'123-45-67890', ceo:'김대표', mgr:'이과장', tel:'02-1234-5678', email:'kt@example.com', addr:'서울시 강남구', memo:''},
+    {name:'대성산업(주)', regnum:'234-56-78901', ceo:'박사장', mgr:'최대리', tel:'031-234-5678', email:'ds@example.com', addr:'경기도 수원시', memo:''},
+    {name:'미래전자', regnum:'345-67-89012', ceo:'정대표', mgr:'강주임', tel:'051-345-6789', email:'mf@example.com', addr:'부산시 해운대구', memo:''}
+  ];
+  sampleCustomers.forEach(c => { db.customers.push({id: db.nextCustId++, ...c}); });
+
+  const t = today();
+  const sampleRecs = [
+    {customer:'(주)한국무역', date:'2026-02-01', duedate:'2026-03-01', amount:5500000, type:'외상매출', manager:'이과장', contact:'02-1234-5678', docno:'TI-2026-001', memo:'1월분 납품대금'},
+    {customer:'대성산업(주)', date:'2026-01-15', duedate:'2026-02-15', amount:3200000, type:'용역비', manager:'최대리', contact:'031-234-5678', docno:'TI-2026-002', memo:'설비점검 용역'},
+    {customer:'미래전자', date:'2026-03-10', duedate:'2026-04-10', amount:8800000, type:'외상매출', manager:'강주임', contact:'051-345-6789', docno:'TI-2026-003', memo:'부품 납품'},
+    {customer:'(주)한국무역', date:'2026-04-01', duedate:'2026-05-01', amount:2200000, type:'수수료', manager:'이과장', contact:'02-1234-5678', docno:'TI-2026-004', memo:'4월 수수료'},
+    {customer:'대성산업(주)', date:'2026-04-20', duedate:'2026-05-20', amount:1500000, type:'임대료', manager:'최대리', contact:'031-234-5678', docno:'TI-2026-005', memo:'창고 임대료'},
+  ];
+  sampleRecs.forEach(r => { db.receivables.push({id: db.nextRecId++, ...r}); });
+
+  // Sample payments
+  db.payments.push({id: db.nextPayId++, recId:1, date:'2026-03-05', amount:2000000, method:'계좌이체', memo:'1차 입금'});
+  db.payments.push({id: db.nextPayId++, recId:3, date:'2026-04-15', amount:8800000, method:'계좌이체', memo:'전액 완납'});
+
+  save(); renderDashboard(); populateRegCustomer(); populatePaySelect();
+}
+</script>
+</body>
+</html>
